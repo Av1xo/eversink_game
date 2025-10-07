@@ -11,9 +11,12 @@
 
 #include "shader.h"
 #include "texture.h"
+#include "camera.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
+void mouse_callback(GLFWwindow* window, double xpos, double ypos);
+void mouse_roll_callback(GLFWwindow* window, double xpos, double ypos);
 
 // CONSTANTS
 const unsigned int SCR_WIDTH = 800;
@@ -22,6 +25,13 @@ const char* vertexShaderSource1 = "./shaders/vertex/vertex_shader_1.vs";
 const char* fragShaderSource1 = "./shaders/fragment/fragment_shader_1.fs";
 const char* textureSource1 = "./res/texture.jpg";
 const char* textureSource2 = "./res/awesomeface.png";
+
+// Variables
+Camera camera;
+float deltaTime = 0.0f;
+float lastFrame = 0.0f;
+bool firstMouse = true;
+float lastX = 400, lastY = 300;
 
 int main() {
     // glfw: ініціалізація та конфігурація
@@ -119,9 +129,12 @@ int main() {
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
 
-    model = glm::rotate(model, glm::radians(-55.0f), glm::vec3(1.0f, 0.0f, 0.0f));
-    view = glm::translate(view, glm::vec3(0.0f, 0.0f, -3.0f));
-    projection = glm::perspective(glm::radians(45.0f), 800.0f/600.0f, 0.1f, 100.0f);
+    model = glm::rotate(model, glm::radians(-45.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+    view = glm::lookAt(
+        glm::vec3(0.0f, 0.0f, 3.0f),
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(0.0f, 1.0f, 0.0f)
+        );
 
 
     // ============ Налаштування текстур ==============
@@ -130,6 +143,11 @@ int main() {
     ShadersProgram1.use();
     ShadersProgram1.setInt("texture1", 0);
     ShadersProgram1.setInt("texture2", 1);
+    glActiveTexture(GL_TEXTURE0);
+    texture1.bind();
+    glActiveTexture(GL_TEXTURE1);
+    texture2.bind();
+
 
     unsigned int VBO, VAO, EBO;
     glGenVertexArrays(1, &VAO);
@@ -159,13 +177,19 @@ int main() {
     glBindVertexArray(0);
 
     glEnable(GL_DEPTH_TEST);
+
+    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    glfwSetCursorPosCallback(window, mouse_callback);
+    glfwSetScrollCallback(window, mouse_roll_callback);
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Цикл рендерингу
     while (!glfwWindowShouldClose(window))
     {
-        auto start_time = std::chrono::high_resolution_clock::now();
-        
+        float currentFrame = glfwGetTime();
+        deltaTime = currentFrame - lastFrame;
+        lastFrame = currentFrame;
+
         // Обробка вводу
         processInput(window);
 
@@ -176,10 +200,14 @@ int main() {
         glBindVertexArray(VAO);
 
         ShadersProgram1.use();
-        glActiveTexture(GL_TEXTURE0);
-        texture1.bind();
-        glActiveTexture(GL_TEXTURE1);
-        texture2.bind();
+
+        view = glm::lookAt(
+            camera.cameraPos,
+            camera.cameraPos + camera.cameraFront,
+            camera.cameraUp
+        );
+
+        projection = glm::perspective(glm::radians(camera.fov), 800.0f/600.0f, 0.1f, 100.0f);
 
         ShadersProgram1.setMat4("view", view);
         ShadersProgram1.setMat4("projection", projection);
@@ -188,8 +216,15 @@ int main() {
         {
             glm::mat4 model = glm::mat4(1.0f);
             model = glm::translate(model, cubePositions[i]);
-            float angle = 20.0f * (i+1); 
-            model = glm::rotate(model, glm::radians(angle *(float)glfwGetTime()), glm::vec3(1.0f, 0.3f, 0.5f));
+            float angle = 20.0f * (i+1);
+            if(i % 3 == 0)
+            {
+                model = glm::rotate(model, glm::radians(angle *(float)glfwGetTime()), glm::vec3(1.0f, 0.3f, 0.5f));
+            } 
+            else
+            {
+                model = glm::rotate(model, glm::radians(angle), glm::vec3(1.0f, 0.3f, 0.5f));
+            }
             ShadersProgram1.setMat4("model", model);
                 
             glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
@@ -199,16 +234,7 @@ int main() {
 
         // glfw: обмін вмістом front- і back-буферів. Відслідковування I/O подій.
         glfwSwapBuffers(window);
-        glfwPollEvents();
-
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto elapsed_time = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
-
-        long long desired_frame_time_ms = 16; // For ~60 FPS
-        if (elapsed_time.count() < desired_frame_time_ms) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(desired_frame_time_ms - elapsed_time.count()));
-        }
+        glfwPollEvents();  
     }
 
     glDeleteVertexArrays(1, &VAO);
@@ -223,8 +249,22 @@ int main() {
 // Обробка всіх подій вводу
 void processInput(GLFWwindow *window)
 {
+    camera.cameraSpeed = 2.5f * deltaTime;
+
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+
+    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
+        camera.moveForward();
+
+    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
+        camera.moveBackward();
+
+    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+        camera.moveLeft();
+
+    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
+        camera.moveRight();
 }
 
 // glfw: щоразу, коли змінюються розміри вікна (користувачем або операційною системою), викликається дана callback-функція
@@ -232,4 +272,35 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
     // Переконуємось, що вікно перегляду відповідає новим розмірам вікна. 
     glViewport(0, 0, width, height);
+}
+
+void mouse_callback(GLFWwindow* window, double xpos, double ypos)
+{
+    if(firstMouse)
+    {
+        lastX = xpos;
+        lastY = ypos;
+        firstMouse = false;
+    }
+
+    float xoffset = xpos - lastX;
+    float yoffset = lastY - ypos;
+
+    lastX = xpos;
+    lastY = ypos;
+
+    xoffset *= camera.sensitivity;
+    yoffset *= camera.sensitivity;
+
+    camera.yaw += xoffset;
+    camera.pitch += yoffset;
+
+    camera.setVertAngle(89.0f, -89.0f);
+
+    camera.setDirection();
+}
+
+void mouse_roll_callback(GLFWwindow* window, double xoffset, double yoffset)
+{
+    camera.setFOV(xoffset, yoffset);
 }
