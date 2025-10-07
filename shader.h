@@ -7,6 +7,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <glm/glm.hpp>
 
 class Shader
 {
@@ -15,7 +16,8 @@ class Shader
         unsigned int ID;
 
         // Конструктор читає данні і виконує побудову шейдера
-        Shader(const char* vertexPath, const char* fragmentPath) {
+        Shader(const char* vertexPath, const char* fragmentPath) 
+        {
             // Отримання вихідного коду вершинного та фрагментного шейдерів з змінної filePath
             std::string vertexCode;
             std::string fragmentCode;
@@ -117,6 +119,10 @@ class Shader
         void setFloat(const std::string &name, float value) const 
         {
             glUniform1f(glGetUniformLocation(ID, name.c_str()), value);
+        };
+        void setVec2(const std::string &name, const glm::vec2 &value)
+        {
+            glUniform2fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
         };
 };
 

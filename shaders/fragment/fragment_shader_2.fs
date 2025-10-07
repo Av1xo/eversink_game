@@ -3,8 +3,10 @@
 out vec4 FragColor;
 
 in vec4 vertexColor;
+in vec3 outPos;
+
 
 void main()
 {
-    FragColor = vertexColor;
+    FragColor = vec4(outPos, 1.0);
 }

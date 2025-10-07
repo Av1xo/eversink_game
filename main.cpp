@@ -3,8 +3,10 @@
 
 #include <iostream>
 #include <cmath>
+#include <glm/glm.hpp>
 
 #include "shader.h"
+#include "texture.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
@@ -13,12 +15,9 @@ void processInput(GLFWwindow *window);
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
 const char* vertexShaderSource1 = "./shaders/vertex/vertex_shader_1.vs";
-
-const char* vertexShaderSource2 = "./shaders/vertex/vertex_shader_2.vs";
-
 const char* fragShaderSource1 = "./shaders/fragment/fragment_shader_1.fs";
-
-const char* fragShaderSource2 = "./shaders/fragment/fragment_shader_2.fs";
+const char* textureSource1 = "./res/texture.jpg";
+const char* textureSource2 = "./res/awesomeface.png";
 
 int main() {
     // glfw: ініціалізація та конфігурація
@@ -52,74 +51,53 @@ int main() {
     // SHADER PROGRAM
     Shader ShadersProgram1(vertexShaderSource1, fragShaderSource1);
 
-    Shader ShadersProgram2(vertexShaderSource2, fragShaderSource2);
-
-
-    float vertices1[] = 
+    float vertices[] = 
     {
-        1.0f, 0.0f, 0.0f,   1.0f, 0.0f, 0.0f,
-        0.5f,  0.5f, 0.0f,  0.0f, 1.0f, 0.0f,
-        0.0f, 0.0f, 0.0f,   0.0f, 0.0f, 1.0f,
+         // coords            // colors           // texture
+         0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // up right
+         0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // down right
+        -0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // down left
+        -0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // up left
     };
 
-    unsigned int indices1[] = {
-        2, 1, 0,
+    unsigned int indices[] = {
+        0, 1, 3,
+        1, 2, 3,
     };
 
-    unsigned int VBO1, VAO1, EBO1;
-    glGenVertexArrays(1, &VAO1);
-    glGenBuffers(1, &VBO1);
-    glGenBuffers(1, &EBO1);
+    // ============ Налаштування текстур ==============
+    Texture texture1(textureSource1);
+    Texture texture2(textureSource2);
+    ShadersProgram1.use();
+    ShadersProgram1.setInt("texture1", 0);
+    ShadersProgram1.setInt("texture2", 1);
 
-    glBindVertexArray(VAO1);
+    unsigned int VBO, VAO, EBO;
+    glGenVertexArrays(1, &VAO);
+    glGenBuffers(1, &VBO);
+    glGenBuffers(1, &EBO);
 
-    glBindBuffer(GL_ARRAY_BUFFER, VBO1);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices1), vertices1, GL_STATIC_DRAW);
+    glBindVertexArray(VAO);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO1);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices1), indices1, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
+
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
 
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 6 * sizeof(float), (void*)(3* sizeof(float)));
+    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3* sizeof(float)));
     glEnableVertexAttribArray(1);
 
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    
-    glBindVertexArray(0);
-
-    float vertices2[] = {
-        -1.0f, 0.0f, 0.0f,
-        -0.5f, 0.5f, 0.0f,
-        0.0f, 0.0f, 0.0f,
-    };
-
-    unsigned int indices2[] = {
-        0, 1, 2,
-    };
-
-    unsigned int VBO2, VAO2, EBO2;
-    glGenVertexArrays(1, &VAO2);
-    glGenBuffers(1, &VBO2);
-    glGenBuffers(1, &EBO2);
-
-    glBindVertexArray(VAO2);
-
-    glBindBuffer(GL_ARRAY_BUFFER, VBO2);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vertices2), vertices2, GL_STATIC_DRAW);
-
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO2);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices2), indices2, GL_STATIC_DRAW);
-
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    glEnableVertexAttribArray(0);
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
+    glEnableVertexAttribArray(2); 
 
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     
     glBindVertexArray(0);
-
     // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Цикл рендерингу
@@ -133,19 +111,28 @@ int main() {
         glClear(GL_COLOR_BUFFER_BIT);
 
         ShadersProgram1.use();
-        glBindVertexArray(VAO1);
-        glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
-        glBindVertexArray(0);
+        glActiveTexture(GL_TEXTURE0);
+        texture1.bind();
+        glActiveTexture(GL_TEXTURE1);
+        texture2.bind();
+        if (glfwGetKey(window, GLFW_KEY_UP) == GLFW_PRESS)
+        {
+            float coef = glfwGetTime();
+            ShadersProgram1.setFloat("mixCoef", sin(coef));
+        }
 
-        ShadersProgram2.use();
-        glBindVertexArray(VAO2);
-        glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_INT, 0);
+        glBindVertexArray(VAO);
+        glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
 
         // glfw: обмін вмістом front- і back-буферів. Відслідковування I/O подій.
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
+
+    glDeleteVertexArrays(1, &VAO);
+    glDeleteBuffers(1, &VBO);
+    glDeleteBuffers(1, &EBO);
     
     // glfw: завершення, звільненнф всіх раніше задіяних ресурсів
     glfwTerminate();
