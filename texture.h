@@ -50,6 +50,33 @@ class Texture {
         void unbind() const {
             glBindTexture(GL_TEXTURE_2D, 0);
         }
+
+        ~Texture() {
+            if (ID != 0) {
+                glDeleteTextures(1, &ID);
+                ID = 0;
+            }
+        }
+
+        Texture(const Texture&) = delete;
+        Texture& operator=(const Texture&) = delete;
+
+        Texture(Texture&& other) noexcept : ID(other.ID) {
+            other.ID = 0;
+        }
+
+        Texture& operator=(Texture&& other) noexcept {
+            if (this != &other) {
+                if (ID != 0) {
+                    glDeleteTextures(1, &ID);
+                }
+                ID = other.ID;
+                other.ID = 0;
+            }
+            return *this;
+        }
+
+
 };
 
 #endif

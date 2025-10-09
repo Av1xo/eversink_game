@@ -104,6 +104,33 @@ class Shader
             glDeleteShader(fragment);
         };
 
+        ~Shader() {
+            if (ID != 0) {
+                glDeleteProgram(ID);
+                ID = 0;
+            }
+        }
+
+        // Заборона копіювання
+        Shader(const Shader&) = delete;
+        Shader& operator=(const Shader&) = delete;
+
+        // Дозвіл переміщення
+        Shader(Shader&& other) noexcept : ID(other.ID) {
+            other.ID = 0;
+        }
+
+        Shader& operator=(Shader&& other) noexcept {
+            if (this != &other) {
+                if (ID != 0) {
+                    glDeleteProgram(ID);
+                }
+                ID = other.ID;
+                other.ID = 0;
+            }
+            return *this;
+        }
+
         // Використання/активація шейдеру
         void use()
         {
@@ -117,7 +144,12 @@ class Shader
         };
         void setInt(const std::string &name, int value) const
         {
-            glUniform1i(glGetUniformLocation(ID, name.c_str()), value);
+            GLint location = glGetUniformLocation(ID, name.c_str());
+            if (location == -1) {
+                std::cout << "Warning: uniform '" << name << "' not found in shader " << ID << std::endl;
+                return;
+            }
+            glUniform1i(location, value);
         };
         void setFloat(const std::string &name, float value) const 
         {
@@ -128,9 +160,19 @@ class Shader
             glUniform2fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
         };
 
-        void setMat4(const std::string &name, const glm::mat4 value) const
+        void setVec3(const std::string &name, const glm::vec3 &value)
         {
-            glUniformMatrix4fv(glGetUniformLocation(ID, name.c_str()), 1, GL_FALSE, glm::value_ptr(value));
+            glUniform3fv(glGetUniformLocation(ID, name.c_str()), 1, &value[0]);
+        };
+
+        void setMat4(const std::string &name, const glm::mat4& value) const
+        {
+            GLint location = glGetUniformLocation(ID, name.c_str());
+            if (location == -1) {
+                std::cout << "Warning: uniform '" << name << "' not found in shader " << ID << std::endl;
+                return;
+            }
+            glUniformMatrix4fv(location, 1, GL_FALSE, glm::value_ptr(value));
         };
 };
 

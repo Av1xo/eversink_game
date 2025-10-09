@@ -1,77 +1,158 @@
 #ifndef CAMERA_H
 #define CAMERA_H
 
-#include <iostream>
 #include <glad/glad.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include <vector>
+
+enum Camera_Movement
+{
+    FORWARD,
+    BACKWARD,
+    LEFT,
+    RIGHT
+};
+
+const float YAW  = -90.0f;
+const float PITCH = 0.0f;
+const float SPEED = 2.5f;
+const float SENSITIVITY = 0.1f;
+const float FOV = 45.0f;
+
 class Camera
 {
     public:
-        float cameraSpeed = 0.05f;
-        float sensitivity = 0.1f;
-        float yaw = -90.0f;
-        float pitch = 0.0f;
-        float fov = 45.0f;
-        glm::vec3 cameraPos = glm::vec3(0.0f, 0.0f, 3.0f);
-        glm::vec3 cameraTarget = glm::vec3(0.0f, 0.0f, 0.0f);
-        glm::vec3 cameraDirection = glm::normalize(cameraPos - cameraTarget);
-        glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f);
-        glm::vec3 cameraRight = glm::normalize(glm::cross(up, cameraDirection));
-        glm::vec3 cameraFront = glm::vec3(0.0f, 0.0f, -1.0f);
-        glm::vec3 cameraUp = glm::cross(cameraDirection, cameraRight);
+        // атрибути камери
+        glm::vec3 Position;
+        glm::vec3 Front;
+        glm::vec3 Up;
+        glm::vec3 Right;
+        glm::vec3 WorldUP;
 
-        void moveForward() 
+        // кути Ейлера
+        float Yaw;
+        float Pitch;
+
+        // Налаштування камери
+        float MovementSpeed;
+        float MouseSensitivity;
+        float Fov;
+
+        // Векторний конструктор
+        Camera(
+            glm::vec3 position = glm::vec3(0.0f, 0.0f, 0.0f),
+            glm::vec3 up = glm::vec3(0.0f, 1.0f, 0.0f),
+            float yaw = YAW,
+            float pitch = PITCH
+        ) 
+        : 
+        Front(glm::vec3(0.0f, 0.0f, -1.0f)),
+        MovementSpeed(SPEED),
+        MouseSensitivity(SENSITIVITY),
+        Fov(FOV)
         {
-            cameraPos += cameraSpeed * cameraFront;
+            // =========== VECTORS ================
+            Position = position;
+            WorldUP = up;
+            Yaw = yaw;
+            Pitch = pitch;
+            updateCameraVectors();
+            std::cout << "CAMERA::CREATED" << std::endl;
         }
 
-        void moveBackward() 
+        Camera(
+            float posX, float posY, float posZ,
+            float upX, float upY, float upZ,
+            float yaw, float pitch
+        )
+        :
+        Front(glm::vec3(0.0f, 0.0f, -1.0f)),
+        MovementSpeed(SPEED),
+        MouseSensitivity(SENSITIVITY),
+        Fov(FOV)
         {
-            cameraPos -= cameraSpeed * cameraFront;
+            // ========= SCALARS ==============
+            Position = glm::vec3(posX, posY, posZ);
+            WorldUP = glm::vec3(upX, upY, upZ);
+            Yaw = yaw;
+            Pitch = pitch;
+            updateCameraVectors();
+            std::cout << "CAMERA::CREATED" << std::endl;
         }
 
-        void moveLeft() 
+        glm::mat4 GetViewMatrix()
         {
-            cameraPos -= glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-        }
-        void moveRight() 
-        {
-            cameraPos += glm::normalize(glm::cross(cameraFront, cameraUp)) * cameraSpeed;
-        }
-
-        void setDirection() 
-        {
-            cameraDirection.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-            cameraDirection.y = sin(glm::radians(pitch));
-            cameraDirection.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-            cameraFront = glm::normalize(cameraDirection);
+            return glm::lookAt(
+                    Position, 
+                    Position + Front,
+                    Up
+                );
         }
 
-        void setVertAngle(float angleUp = 80.0f, float angleDown = -80.0f)
+        void ProcessKeyboard(Camera_Movement direction, float deltatime)
         {
-            // Set vertical angle default UP=80 DOWN=-80
-            if(pitch > angleUp)
-                pitch = angleUp;
-            if(pitch < angleDown)
-                pitch = angleDown;
-        }
-
-        void setFOV(double xoffset, double yoffset)
-        {
-            if(fov >= 1.0f && fov <= 45.0f)
+            float velocity = MovementSpeed * deltatime;
+            switch (direction)
             {
-                fov -= yoffset;
+            case FORWARD:
+                Position += Front * velocity;
+                break;
+            case BACKWARD:
+                Position -= Front * velocity;
+                break;
+            case LEFT:
+                Position -= Right * velocity;
+                break;
+            case RIGHT:
+                Position += Right * velocity;
+                break;
+            default:
+                break;
             }
-            else if(fov < 1.0f)
+        }
+
+        void ProcessMouseMovement(float xoffset, float yoffset, GLboolean constrainPitch = true)
+        {
+            xoffset *= MouseSensitivity;
+            yoffset *= MouseSensitivity;
+
+            Yaw  += xoffset;
+            Pitch += yoffset;
+
+            if (constrainPitch)
             {
-                fov = 1.0f;
+                if(Pitch > 89.0f)
+                    Pitch = 89.0f;
+                if(Pitch < -89.0f)
+                    Pitch = -89.0f;
             }
-            else if(fov > 45.0f)
-            {
-                fov = 45.0f;
-            }
+
+            updateCameraVectors();
+        }
+
+        void ProcessMouseScroll(float yoffset)
+        {
+            if (Fov >= 1.0f && Fov <= 45.0f)
+                Fov -= yoffset;
+            if (Fov <= 1.0f)
+                Fov = 1.0f;
+            if (Fov >= 45.0f)
+                Fov = 45.0f;
+        }
+
+    private:
+        void updateCameraVectors()
+        {
+            glm::vec3 front;
+            front.x = cos(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+            front.y = sin(glm::radians(Pitch));
+            front.z = sin(glm::radians(Yaw)) * cos(glm::radians(Pitch));
+            Front = glm::normalize(front);
+
+            Right = glm::normalize(glm::cross(Front, WorldUP));
+            Up = glm::normalize(glm::cross(Right, Front));
         }
 };
 
