@@ -1,4 +1,23 @@
 #version 450 core
+struct Material {
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+    float shininess;
+};
+
+struct Light {
+    vec3 position;
+
+    vec3 ambient;
+    vec3 diffuse;
+    vec3 specular;
+
+    float constant;
+    float linear;
+    float quadratic;
+};
+
 
 out vec4 FragColor;
 
@@ -11,41 +30,46 @@ in vec3 FragPos;
 uniform sampler2D texture0;
 uniform sampler2D texture1;
 uniform float colorAlpha;
-uniform vec3 lightPos;
-uniform vec3 viewPos;  // позиція камери для specular
+uniform vec3 viewPos; 
 uniform bool useTextures;
+uniform Material material;
+uniform Light light;
 
 void main()
 {
-    // Нормалізація нормалі
+    // Ambient
+    vec3 ambient = light.ambient * material.ambient;
+
+    // Attenuation
+    float distanceLight = length(light.position - FragPos);
+    float attenuation = 1.0 / (light.constant + light.linear * distanceLight + light.quadratic * (distanceLight * distanceLight));
+    
+    // Diffuse 
     vec3 norm = normalize(Normal);
-    
-    // Ambient освітлення
-    float ambientStrength = 0.1;
-    vec3 ambient = ambientStrength * lightColor;
-    
-    // Diffuse освітлення
-    vec3 lightDir = normalize(lightPos - FragPos);
+    vec3 lightDir = normalize(light.position - FragPos);
     float diff = max(dot(norm, lightDir), 0.0);
-    vec3 diffuse = diff * lightColor;
+    vec3 diffuse = light.diffuse * (diff * material.diffuse);
     
-    // Specular освітлення (Phong)
-    float specularStrength = 1.0;
+    // Specular 
     vec3 viewDir = normalize(viewPos - FragPos);
-    vec3 reflectDir = reflect(-lightDir, norm);
-    float spec = pow(max(dot(viewDir, reflectDir), 0.0), 128);  // 32 - shininess
-    vec3 specular = specularStrength * spec * lightColor;
+    vec3 halfwayDir = normalize(lightDir + viewDir); 
+    float spec = pow(max(dot(norm, halfwayDir), 0.0), material.shininess);
+    vec3 specular = light.specular * (spec * material.specular);
     
-    // Основний колір (текстура або solid color)
     vec4 mainColor;
+
+    ambient = ambient * attenuation;
+    diffuse = diffuse * attenuation;
+    specular = specular * attenuation;
+
+    // Phong
+    vec3 result = ambient + diffuse + specular;
+
     if (useTextures) {
-        mainColor = mix(texture(texture0, TexCoord), texture(texture1, TexCoord), 0.2) * vec4(ourColor, colorAlpha);
+        mainColor = mix(texture(texture0, TexCoord), texture(texture1, TexCoord), 0.2) * vec4(result, 1.0);
     } else {
-        mainColor = vec4(ourColor, 1.0);
+        mainColor = vec4(result, 1.0);
     }
     
-    // Фінальний результат за моделлю Фонга
-    vec3 result = (ambient + diffuse + specular) * mainColor.rgb;
-    
-    FragColor = vec4(result, colorAlpha);
+    FragColor = mainColor;
 }

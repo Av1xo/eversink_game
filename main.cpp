@@ -13,6 +13,8 @@
 #include "texture.h"
 #include "camera.h"
 #include "mesh.h"
+#include "material.h"
+#include "light.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void processInput(GLFWwindow *window);
@@ -60,6 +62,7 @@ int main() {
         glfwTerminate();
         return -1;
     }
+
     glfwMakeContextCurrent(window);
     glfwSetFramebufferSizeCallback(window, framebuffer_size_callback);
 
@@ -75,43 +78,84 @@ int main() {
 
     // SHADER PROGRAM
     Shader ShadersProgram1(vertexShaderSource1, fragShaderSource1);
+    Shader LightCubeShader(vertexShaderLightSource, fragShaderLightSource);
 
     // CUBE
     glm::vec3 cubePositions[] = {
-        glm::vec3( 0.0f,  0.0f,  0.0f), 
-        glm::vec3( 2.0f,  5.0f, -15.0f), 
-        glm::vec3(-1.5f, -2.2f, -2.5f),  
-        glm::vec3(-3.8f, -2.0f, -12.3f),  
-        glm::vec3( 2.4f, -0.4f, -3.5f),  
-        glm::vec3(-1.7f,  3.0f, -7.5f),  
-        glm::vec3( 1.3f, -2.0f, -2.5f),  
-        glm::vec3( 1.5f,  2.0f, -2.5f), 
-        glm::vec3( 1.5f,  0.2f, -1.5f), 
-        glm::vec3(-1.3f,  1.0f, -1.5f) 
+        glm::vec3( 1.0f,  0.0f,  0.0f), 
+        glm::vec3( 2.0f,  0.0f,  0.0f), 
+        glm::vec3( 3.0f,  0.0f,  0.0f),  
+        glm::vec3( 4.0f,  0.0f,  0.0f),  
+        glm::vec3( 5.0f,  0.0f, 0.0f),  
+        glm::vec3( 6.0f,  0.0f,  0.0f),  
+        glm::vec3( 7.0f,  0.0f,  0.0f),  
+        glm::vec3( 8.0f,  0.0f,  0.0f), 
+        glm::vec3( 9.0f,  0.0f,  0.0f), 
+        glm::vec3( 10.0f,  0.0f, 0.0f) 
     };
 
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
 
-    // Позиція джерела світла
-    glm::vec3 lightPosition = glm::vec3(3.0f, 3.0f, -2.0f);
+    // ========================== LIGHT ===========================
+    glm::vec3 lightPosition = glm::vec3(7.0f, 3.0f, 0.0f);
+
+    Light mainLight;
+    mainLight.position = lightPosition;
+    mainLight.ambient = glm::vec3(0.2f, 0.2f, 0.2f);
+    mainLight.diffuse = glm::vec3(0.5f, 0.5f, 0.5f);
+    mainLight.specular = glm::vec3(1.0f, 1.0f, 1.0f);
+    mainLight.constant = 1.0f;
+    mainLight.linear = 0.09f;
+    mainLight.quadratic = 0.032f;
 
     // ============ Налаштування текстур ==============
     glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_BACK);
 
     Texture texture1(textureSource1);
     Texture texture2(textureSource2);
     std::vector<Texture*> cubeTextures = {&texture1, &texture2};
 
+    Material cubeMaterials[] = {
+        Materials::Gold,
+        Materials::Silver,
+        Materials::Emerald,
+        Materials::Bronze,
+        Materials::Copper,
+        Materials::Jade,
+        Materials::Pearl,
+        Materials::RedPlastic,
+        Materials::BlackPlastic,
+        Materials::WhiteRubber
+    };
+
     std::vector<Cube> cubes;
     cubes.reserve(std::size(cubePositions));
 
-    for (auto& pos : cubePositions) {
-        cubes.emplace_back(pos, glm::vec3(1.0f), glm::vec3(1.0f, 0.5f, 0.3f), ShadersProgram1, cubeTextures, true);
+    for (size_t i = 0; i < std::size(cubePositions); i++) {
+        cubes.emplace_back(
+            cubePositions[i], 
+            glm::vec3(1.0f), 
+            glm::vec3(1.0f), 
+            ShadersProgram1, 
+            cubeTextures,
+            cubeMaterials[i % std::size(cubeMaterials)],
+            true
+        );
     }
 
-    Cube lightCube(lightPosition, glm::vec3(0.5f), glm::vec3(1.0f), ShadersProgram1, {}, false);
+    Cube lightCube(
+        lightPosition, 
+        glm::vec3(0.5f), 
+        glm::vec3(1.0f), 
+        LightCubeShader, 
+        {},
+        Materials::Pearl,
+        false
+    );
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, mouse_callback);
@@ -132,24 +176,25 @@ int main() {
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT| GL_DEPTH_BUFFER_BIT);
 
-        ShadersProgram1.use();
-
         view = camera.GetViewMatrix();
         projection = glm::perspective(glm::radians(camera.Fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
         // Малюємо всі куби з освітленням
         for(int i = 0; i < std::size(cubePositions); i++){
             cubes[i].showTex = showTextures;
-            cubes[i].draw(view, projection, lightPosition, camera.Position);
+            cubes[i].draw(view, projection, mainLight, camera.Position);
         }
 
         // Малюємо джерело світла
-        lightCube.draw(view, projection, lightPosition, camera.Position);
+        lightCube.draw(view, projection, mainLight, camera.Position);
 
         // glfw: обмін вмістом front- і back-буферів. Відслідковування I/O подій.
         glfwSwapBuffers(window);
         glfwPollEvents();  
     }
+
+    cubes.clear();
+    cubeTextures.clear();
 
     // glfw: завершення, звільнення всіх раніше задіяних ресурсів
     glfwTerminate();

@@ -7,10 +7,12 @@
 
 #include "shader.h"
 #include "texture.h"
+#include "material.h"
+#include "light.h"
 
 class Mesh {
     public:
-        virtual void draw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& lightPos, const glm::vec3& viewPos) = 0;
+        virtual void draw(const glm::mat4& view, const glm::mat4& projection, const Light& light, const glm::vec3& viewPos) = 0;
         virtual ~Mesh() = default;
 };
 
@@ -31,15 +33,17 @@ class Cube : public Mesh
         glm::vec3 position;
         glm::vec3 size;
         bool showTex;
+        Material material;
         
         Cube(
             const glm::vec3& pos,
             const glm::vec3& cubeSize, 
             const glm::vec3& color, 
             Shader& shaderRef, 
-            const std::vector<Texture*>& texs, 
+            const std::vector<Texture*>& texs,
+            const Material& mat = Materials::Silver, 
             bool showTex = true)
-        : position(pos), shader(shaderRef), size(cubeSize), showTex(showTex)
+        : position(pos), shader(shaderRef), size(cubeSize), material(mat),showTex(showTex)
         {
             std::cout << "CUBE::START_INIT" << std::endl;
             for (auto tex : texs)
@@ -81,16 +85,18 @@ class Cube : public Mesh
             std::cout << "CUBE::END_INIT" << std::endl;
         };
         
-        void draw(const glm::mat4& view, const glm::mat4& projection, const glm::vec3& lightPos, const glm::vec3& viewPos) override
+        void draw(const glm::mat4& view, const glm::mat4& projection, const Light& light, const glm::vec3& viewPos) override
         {
             shader.use();
 
             glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
-            shader.setVec3("lightPos", lightPos);  // Виправлено: прибрано крапку з комою
+
             shader.setVec3("viewPos", viewPos);    // Додано позицію камери
             shader.setMat4("model", model);
             shader.setMat4("view", view);
             shader.setMat4("projection", projection);
+            light.setShaderUniforms(shader);
+            material.setShaderUniforms(shader);
 
             // Перевіряємо чи є текстури
             bool hasTextures = !textures.empty();
