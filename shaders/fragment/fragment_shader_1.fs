@@ -35,10 +35,11 @@ in vec3 FragPos;
 
 uniform sampler2D texture0;
 uniform sampler2D texture1;
+uniform Light lights[32];
+uniform int numLights;
 uniform vec3 viewPos;
 uniform bool useTextures;
 uniform Material material;
-uniform Light light;
 
 const float PI = 3.14159265359;
 
@@ -82,79 +83,110 @@ vec3 FresnelSchlick(float HdotV, vec3 F0)
     return F0 + (1.0 - F0) * pow(clamp(1.0 - HdotV, 0.0, 1.0), 5.0);
 }
 
+vec3 calculateLight(Light light, vec3 N, vec3 V, vec3 F0, float viewNdotV)
+{
+    // === 1. Обчислення L (напрямку до світла) та Attenuation ===
+    vec3 L;
+    float attenuation = 1.0;
+
+    if (light.type == 0) { // DIRECTIONAL LIGHT
+        L = normalize(-light.direction);
+        attenuation = 1.0;
+    }
+    else { // POINT (1) або SPOT (2)
+        float distanceLight = length(light.position - FragPos);
+        L = normalize(light.position - FragPos);
+        
+        // Attenuation (затухання)
+        attenuation = 1.0 / (light.constant + light.linear * distanceLight + 
+                             light.quadratic * (distanceLight * distanceLight));
+
+        if (light.type == 2) { // SPOT LIGHT (додатковий множник)
+            float theta = dot(L, normalize(-light.direction));
+            float epsilon = light.cutOff - light.outerCutOff;
+            float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
+            attenuation *= intensity;
+        }
+    }
+    
+    // Якщо світло вимкнене або поза межами, виходимо
+    if (attenuation < 0.001) return vec3(0.0);
+
+    // Radiance - інтенсивність світла з урахуванням атенуації
+    vec3 radiance = light.diffuse * attenuation;
+    
+    // === 2. Cook-Torrance BRDF та Обчислення Lo ===
+    
+    vec3 H = normalize(V + L); // Halfway vector
+    
+    // Dot products
+    float NdotL = max(dot(N, L), 0.0);
+    float NdotH = max(dot(N, H), 0.0);
+    float HdotV = max(dot(H, V), 0.0);
+
+    // D, G, F
+    float D = DistributionGGX(NdotH, material.roughness);
+    float G = GeometrySmith(viewNdotV, NdotL, material.roughness);
+    vec3 F = FresnelSchlick(HdotV, F0);
+
+    // Specular
+    vec3 numerator = D * G * F;
+    float denominator = 4.0 * viewNdotV * NdotL;
+    vec3 specular = numerator / max(denominator, 0.001);
+
+    // Енергозбереження та Diffuse
+    vec3 kS = F;
+    vec3 kD = vec3(1.0) - kS;
+    kD *= 1.0 - material.metallic; 
+
+    // Lambertian diffuse
+    vec3 diffuse = kD * material.albedo / PI;
+
+    // Підсумкове освітлення від цього джерела (Lo)
+    vec3 Lo = (diffuse + specular) * radiance * NdotL;
+    
+    return Lo;
+}
+
+
 void main()
 {
     // Нормалізуємо вектори
     vec3 N = normalize(Normal);
     vec3 V = normalize(viewPos - FragPos);
-    
-    vec3 L;
-    float attenuation = 1.0;
-    
-    if (light.type == 0) {
-        // DIRECTIONAL LIGHT (напрямлене - як сонце)
-        L = normalize(-light.direction);  // Інвертуємо, бо це напрямок ДО світла
-        attenuation = 1.0;  // Без затухання
-    }
-    else if (light.type == 1) {
-        L = normalize(light.position - FragPos);
-        float distance = length(light.position - FragPos);
-        attenuation = 1.0 / (light.constant + light.linear * distance + 
-                           light.quadratic * (distance * distance));
-    }
-    else if (light.type == 2) {
-        L = normalize(light.position - FragPos);
-        float distance = length(light.position - FragPos);
-        attenuation = 1.0 / (light.constant + light.linear * distance + 
-                           light.quadratic * (distance * distance));
-        
-        float theta = dot(L, normalize(-light.direction));
-        float epsilon = light.cutOff - light.outerCutOff;
-        float intensity = clamp((theta - light.outerCutOff) / epsilon, 0.0, 1.0);
-        attenuation *= intensity;
-    }
-    
-    vec3 H = normalize(V + L);
-
-    float NdotL = max(dot(N, L), 0.0);
     float NdotV = max(dot(N, V), 0.0);
-    float NdotH = max(dot(N, H), 0.0);
-    float HdotV = max(dot(H, V), 0.0);
-
-    vec3 radiance = light.diffuse * attenuation;
-
+    
     // F0 для Fresnel
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, material.albedo, material.metallic);
 
+    // 1. Ініціалізація сумматорів
+    vec3 totalAmbient = vec3(0.0); 
+    vec3 finalLo = vec3(0.0);
+    
+    // 2. Цикл по ВСІХ джерелах світла
+    for(int i = 0; i < numLights; ++i)
+    {
+        // Ambient беремо від кожного джерела, але з меншою вагою
+        totalAmbient += lights[i].ambient * material.albedo * material.ao * 0.3;
+        
+        // Додаємо внесок кожного світла
+        finalLo += calculateLight(lights[i], N, V, F0, NdotV);
+    }
+    
+    // 3. Фінальний колір
+    vec3 finalColor = totalAmbient + finalLo;
+
     // Fresnel ефект для прозорості
-    float fresnelFactor = pow(1.0 - NdotV, 3.0);
-    float finalAlpha = mix(material.alpha, 1.0, fresnelFactor * (1.0 - material.metallic));
+    float fresnelFactor = pow(1.0 - NdotV, 5.0);
+    float finalAlpha = mix(material.alpha, 1.0, fresnelFactor * (1.0 - material.metallic) * 0.7);
 
-    // Cook-Torrance BRDF
-    float D = DistributionGGX(NdotH, material.roughness);
-    float G = GeometrySmith(NdotV, NdotL, material.roughness);
-    vec3 F = FresnelSchlick(HdotV, F0);
-
-    vec3 numerator = D * G * F;
-    float denominator = 4.0 * NdotV * NdotL;
-    vec3 specular = numerator / max(denominator, 0.001);
-
-    // Енергозбереження
-    vec3 kS = F;
-    vec3 kD = vec3(1.0) - kS;
-    kD *= 1.0 - material.metallic;
-
-    // Lambertian diffuse
-    vec3 diffuse = kD * material.albedo / PI;
-
-    // Підсумкове освітлення
-    vec3 Lo = (diffuse + specular) * radiance * NdotL;
-
-    // Ambient lighting
-    vec3 ambient = light.ambient * material.albedo * material.ao;
-
-    vec3 finalColor = ambient + Lo;
+    // Tone mapping (ACES)
+    vec3 x = finalColor * 0.6;
+    finalColor = (x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14);
+    
+    // Gamma correction
+    finalColor = pow(finalColor, vec3(1.0 / 2.2));
 
     // Застосування текстур
     vec4 resultColor;

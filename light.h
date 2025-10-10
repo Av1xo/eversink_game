@@ -2,6 +2,7 @@
 #define LIGHT_H
 
 #include <glm/glm.hpp>
+#include <iostream>
 #include "shader.h"
 
 enum class LightType {
@@ -33,21 +34,29 @@ struct Light{
     float cutOff;        // Внутрішній кут (в радіанах)
     float outerCutOff;   // Зовнішній кут (в радіанах)
 
-    void setShaderUniforms(Shader& shader) const {
-        shader.setInt("light.type", static_cast<int>(type));
-        shader.setVec3("light.position", position);
-        shader.setVec3("light.direction", direction);
+    void setShaderUniforms(Shader& shader, const std::string& name, int index) const {
+        std::string uniformName = name + "[" + std::to_string(index) + "]";
         
-        shader.setVec3("light.ambient", ambient);
-        shader.setVec3("light.diffuse", diffuse);
-        shader.setVec3("light.specular", specular);
-        
-        shader.setFloat("light.constant", constant);
-        shader.setFloat("light.linear", linear);
-        shader.setFloat("light.quadratic", quadratic);
-        
-        shader.setFloat("light.cutOff", cutOff);
-        shader.setFloat("light.outerCutOff", outerCutOff);
+        shader.setInt(uniformName + ".type", static_cast<int>(type));
+        shader.setVec3(uniformName + ".ambient", ambient);
+        shader.setVec3(uniformName + ".diffuse", diffuse);
+        shader.setVec3(uniformName + ".specular", specular);
+
+        if (type == LightType::POINT || type == LightType::SPOT) {
+            shader.setVec3(uniformName + ".position", position);
+            shader.setFloat(uniformName + ".constant", constant);
+            shader.setFloat(uniformName + ".linear", linear);
+            shader.setFloat(uniformName + ".quadratic", quadratic);
+        }
+
+        if (type == LightType::DIRECTIONAL || type == LightType::SPOT) {
+            shader.setVec3(uniformName + ".direction", direction);
+        }
+
+        if (type == LightType::SPOT) {
+            shader.setFloat(uniformName + ".cutOff", cutOff);
+            shader.setFloat(uniformName + ".outerCutOff", outerCutOff);
+        }
     }
 };
 
@@ -69,6 +78,9 @@ namespace Lights {
         light.constant = 1.0f;
         light.linear = 0.0f;
         light.quadratic = 0.0f;
+        light.position = glm::vec3(0.0f);
+        light.cutOff = 0.0f;
+        light.outerCutOff = 0.0f;
         return light;
     }
 
@@ -91,6 +103,9 @@ namespace Lights {
         light.constant = constant;
         light.linear = linear;
         light.quadratic = quadratic;
+        light.direction = glm::vec3(0.0f);
+        light.cutOff = 0.0f;
+        light.outerCutOff = 0.0f;
         return light;
     }
 
@@ -114,11 +129,13 @@ namespace Lights {
         light.ambient = ambient;
         light.diffuse = diffuse;
         light.specular = specular;
-        light.cutOff = cutOff;
-        light.outerCutOff = outerCutOff;
+        // ВАЖЛИВО: зберігаємо косинуси кутів, а не самі кути!
+        light.cutOff = glm::cos(cutOff);
+        light.outerCutOff = glm::cos(outerCutOff);
         light.constant = constant;
         light.linear = linear;
         light.quadratic = quadratic;
+        
         return light;
     }
 }

@@ -9,10 +9,13 @@
 #include "texture.h"
 #include "material.h"
 #include "light.h"
+#include "camera.h"
 
 class Mesh {
     public:
-        virtual void draw(const glm::mat4& view, const glm::mat4& projection, const Light& light, const glm::vec3& viewPos) = 0;
+        virtual void draw(const glm::mat4& view, const glm::mat4& projection, 
+                         const std::vector<Light>& lights, const glm::vec3& viewPos, 
+                         const Camera& camera) = 0;
         virtual ~Mesh() = default;
 };
 
@@ -85,17 +88,49 @@ class Cube : public Mesh
             std::cout << "CUBE::END_INIT" << std::endl;
         };
         
-        void draw(const glm::mat4& view, const glm::mat4& projection, const Light& light, const glm::vec3& viewPos) override
+        void draw(const glm::mat4& view, const glm::mat4& projection, 
+                 const std::vector<Light>& lights, const glm::vec3& viewPos,
+                 const Camera& camera) override
         {
             shader.use();
 
             glm::mat4 model = glm::translate(glm::mat4(1.0f), position);
 
-            shader.setVec3("viewPos", viewPos);    // Додано позицію камери
+            shader.setVec3("viewPos", viewPos);
             shader.setMat4("model", model);
             shader.setMat4("view", view);
             shader.setMat4("projection", projection);
-            light.setShaderUniforms(shader);
+            
+            // Встановлюємо кількість джерел світла
+            int numLights = static_cast<int>(lights.size());
+            shader.setInt("numLights", numLights);
+            
+            static bool debugPrinted = false;
+            
+            // Передаємо всі джерела світла в шейдер
+            for (size_t i = 0; i < lights.size(); ++i) {
+                // Якщо це Spotlight, оновлюємо його позицію та напрямок
+                Light currentLight = lights[i];
+                if (currentLight.type == LightType::SPOT) {
+                    currentLight.position = camera.Position;
+                    currentLight.direction = camera.Front;
+                    
+                    if (!debugPrinted) {
+                        std::cout << "Spotlight оновлено: pos=(" 
+                                  << currentLight.position.x << "," 
+                                  << currentLight.position.y << "," 
+                                  << currentLight.position.z << ") dir=("
+                                  << currentLight.direction.x << ","
+                                  << currentLight.direction.y << ","
+                                  << currentLight.direction.z << ")" << std::endl;
+                        debugPrinted = true;
+                    }
+                }
+                
+                // Передача uniform у шейдер
+                currentLight.setShaderUniforms(shader, "lights", static_cast<int>(i));
+            }
+            
             material.setShaderUniforms(shader);
 
             // Перевіряємо чи є текстури

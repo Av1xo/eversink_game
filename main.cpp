@@ -4,6 +4,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include <vector>
 #include <cmath>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -41,7 +42,10 @@ float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 bool showTextures = true; 
-bool tKeyPressed = false; 
+bool tKeyPressed = false;
+
+bool spotlightEnabled = true;
+bool fKeyPressed = false; 
 
 int main() {
     // glfw: ініціалізація та конфігурація
@@ -73,77 +77,112 @@ int main() {
         return -1;
     }
 
-    int success;
-    char infoLog[512];
-
     // SHADER PROGRAM
     Shader ShadersProgram1(vertexShaderSource1, fragShaderSource1);
-    Shader LightCubeShader(vertexShaderLightSource, fragShaderLightSource);
-
-    // CUBE
+    // CUBE POSITIONS
     glm::vec3 cubePositions[] = {
-    // РЯД 1: Метали (Яскраві відбиття, низька шорсткість) - Y = 0.0f
-    glm::vec3(-5.0f, 0.0f, 0.0f),  // Gold
-    glm::vec3(-2.5f, 0.0f, 0.0f),  // Silver
-    glm::vec3( 0.0f, 0.0f, 0.0f),  // Bronze
-    glm::vec3( 2.5f, 0.0f, 0.0f),  // Chrome
-    glm::vec3( 5.0f, 0.0f, 0.0f),  // Copper
-    
-    // РЯД 2: Опакові (Непрозорі) Діелектрики - Y = 2.5f
-    glm::vec3(-5.0f, 2.5f, 0.0f),  // BlackPlastic
-    glm::vec3(-2.5f, 2.5f, 0.0f),  // RedPlastic
-    glm::vec3( 0.0f, 2.5f, 0.0f),  // WhiteRubber (Висока шорсткість)
-    glm::vec3( 2.5f, 2.5f, 0.0f),  // RoughIron (Хоча метал, тут для контрасту)
-    glm::vec3( 5.0f, 2.5f, 0.0f),  // Pearl (Слабо-напівпрозорий/матовий)
+        // РЯД 1: Метали (Y = 0.0f)
+        glm::vec3(-5.0f, 0.0f, 0.0f),  // Gold
+        glm::vec3(-2.5f, 0.0f, 0.0f),  // Silver
+        glm::vec3( 0.0f, 0.0f, 0.0f),  // Bronze
+        glm::vec3( 2.5f, 0.0f, 0.0f),  // Chrome
+        glm::vec3( 5.0f, 0.0f, 0.0f),  // Copper
+        
+        // РЯД 2: Опакові діелектрики (Y = 2.5f)
+        glm::vec3(-5.0f, 2.5f, 0.0f),  // BlackPlastic
+        glm::vec3(-2.5f, 2.5f, 0.0f),  // RedPlastic
+        glm::vec3( 0.0f, 2.5f, 0.0f),  // WhiteRubber
+        glm::vec3( 2.5f, 2.5f, 0.0f),  // RoughIron
+        glm::vec3( 5.0f, 2.5f, 0.0f),  // Pearl
 
-    // РЯД 3: Прозорі та Напівпрозорі (З низькою шорсткістю) - Y = 5.0f
-    glm::vec3(-5.0f, 5.0f, 0.0f),  // Glass
-    glm::vec3(-2.5f, 5.0f, 0.0f),  // ColoredGlass
-    glm::vec3( 0.0f, 5.0f, 0.0f),  // Crystal
-    glm::vec3( 2.5f, 5.0f, 0.0f),  // Ice
-    glm::vec3( 5.0f, 5.0f, 0.0f),  // Water
+        // РЯД 3: Прозорі (Y = 5.0f)
+        glm::vec3(-5.0f, 5.0f, 0.0f),  // Glass
+        glm::vec3(-2.5f, 5.0f, 0.0f),  // ColoredGlass
+        glm::vec3( 0.0f, 5.0f, 0.0f),  // Crystal
+        glm::vec3( 2.5f, 5.0f, 0.0f),  // Ice
+        glm::vec3( 5.0f, 5.0f, 0.0f),  // Water
 
-    // РЯД 4: Спеціальні та Кольорові Прозорі (Для кольорової передачі) - Y = 7.5f
-    glm::vec3(-5.0f, 7.5f, 0.0f),  // Amber
-    glm::vec3(-2.5f, 7.5f, 0.0f),  // Emerald
-    glm::vec3( 0.0f, 7.5f, 0.0f),  // Jade
-    glm::vec3( 2.5f, 7.5f, 0.0f),  // FrostedGlass (Для контрасту з Glass)
-    glm::vec3( 5.0f, 7.5f, 0.0f)   // WhiteRubber (Duplicate)
+        // РЯД 4: Спеціальні (Y = 7.5f)
+        glm::vec3(-5.0f, 7.5f, 0.0f),  // Amber
+        glm::vec3(-2.5f, 7.5f, 0.0f),  // Emerald
+        glm::vec3( 0.0f, 7.5f, 0.0f),  // Jade
+        glm::vec3( 2.5f, 7.5f, 0.0f),  // FrostedGlass
+        glm::vec3( 5.0f, 7.5f, 0.0f)   // WhiteRubber
     };
 
     glm::mat4 model = glm::mat4(1.0f);
     glm::mat4 view = glm::mat4(1.0f);
     glm::mat4 projection = glm::mat4(1.0f);
 
-    // ========================== LIGHT ===========================
+    // ========================== LIGHTS ===========================
     glm::vec3 lightPosition = glm::vec3(0.0f, 7.0f, 5.0f);
 
-    // Light mainLight = Lights::CreateDirectional(
-    //     glm::vec3(-0.2f, -1.0f, -0.3f),  // Напрямок світла (зверху-справа)
-    //     glm::vec3(0.08f, 0.08f, 0.08f),     // Ambient
-    //     glm::vec3(0.8f, 0.8f, 0.8f),     // Diffuse
-    //     glm::vec3(1.0f, 1.0f, 1.0f)      // Specular
-    // );
+    std::vector<Light> sceneLights = {
+        // 1. DIRECTIONAL (Слабке загальне освітлення)
+        Lights::CreateDirectional(
+            glm::vec3(0.0f, -1.0f, 0.0f),
+            glm::vec3(0.015f),              // Дуже слабкий ambient
+            glm::vec3(0.15f, 0.15f, 0.18f), // Ледь помітне денне світло
+            glm::vec3(0.3f)
+        ),
+        // 2. POINT #1 (Тепле оранжеве світло зліва)
+        Lights::CreatePoint(
+            glm::vec3(-6.0f, 3.0f, 3.0f),
+            glm::vec3(0.02f), 
+            glm::vec3(2.0f, 0.8f, 0.3f),   // Оранжеве
+            glm::vec3(1.0f),
+            1.0f,
+            0.045f,
+            0.0075f
+        ),
+        // 3. POINT #2 (Холодне синє світло справа)
+        Lights::CreatePoint(
+            glm::vec3(6.0f, 3.0f, 3.0f),
+            glm::vec3(0.02f), 
+            glm::vec3(0.3f, 0.8f, 2.0f),   // Синє
+            glm::vec3(1.0f),
+            1.0f,
+            0.045f,
+            0.0075f
+        ),
+        // 4. POINT #3 (Зелене світло ззаду зверху)
+        Lights::CreatePoint(
+            glm::vec3(0.0f, 6.0f, -3.0f),
+            glm::vec3(0.02f), 
+            glm::vec3(0.4f, 2.0f, 0.6f),   // Зелене
+            glm::vec3(1.0f),
+            1.0f,
+            0.045f,
+            0.0075f
+        ),
+        // 5. SPOT (Ліхтарик камери)
+        Lights::CreateSpot(
+            camera.Position,
+            camera.Front,
+            glm::vec3(0.0f),
+            glm::vec3(4.0f, 4.0f, 5.0f),   // Яскраве біло-синє
+            glm::vec3(3.0f),
+            glm::radians(20.0f),
+            glm::radians(30.0f),
+            1.0f,
+            0.027f,
+            0.0028f
+        )
+    };
 
-    Light mainLight = Lights::CreatePoint(
-        glm::vec3(0.0f, 7.0f, 5.0f),                    // Позиція
-        glm::vec3(0.5f),     // Ambient
-        glm::vec3(7.0f, 7.0f, 7.0f),     // Diffuse
-        glm::vec3(1.0f, 5.0f, 1.0f),     // Specular
-        1.0f,                             // Constant
-        0.09f,                            // Linear
-        0.032f                            // Quadratic
-    );
-
-    // Light mainLight = Lights::CrateSpot(
-    //     camera.Position,                  // Позиція (в позиції камери)
-    //     camera.Front,                     // Напрямок (куди дивиться камера)
-    //     glm::vec3(0.1f, 0.1f, 0.1f),     // Ambient
-    //     glm::vec3(1.0f, 1.0f, 1.0f),     // Diffuse
-    //     glm::vec3(1.0f, 1.0f, 1.0f),     // Specular
-    //     glm::radians(12.5f),              // Внутрішній кут
-    //     glm::radians(17.5f)               // Зовнішній кут
-    // );
+    std::cout << "=== Джерела світла ===" << std::endl;
+    std::cout << "Кількість джерел: " << sceneLights.size() << std::endl;
+    for (size_t i = 0; i < sceneLights.size(); ++i) {
+        std::cout << "Світло " << i << ": тип = " << static_cast<int>(sceneLights[i].type) << std::endl;
+    }
+    
+    std::cout << "\n=== Керування ===" << std::endl;
+    std::cout << "WASD - рух камери" << std::endl;
+    std::cout << "Миша - огляд" << std::endl;
+    std::cout << "Колесо миші - зум" << std::endl;
+    std::cout << "T - увімкнути/вимкнути текстури" << std::endl;
+    std::cout << "F - увімкнути/вимкнути ліхтарик (spotlight)" << std::endl;
+    std::cout << "ESC - вихід\n" << std::endl;;
 
     // ============ Налаштування текстур ==============
     glEnable(GL_DEPTH_TEST);
@@ -158,24 +197,25 @@ int main() {
     std::vector<Texture*> cubeTextures = {&texture1, &texture2};
 
     Material cubeMaterials[] = {
-        Materials::Amber,
-        Materials::BlackPlastic,
+        Materials::Gold,
+        Materials::Silver,
         Materials::Bronze,
         Materials::Chrome,
-        Materials::ColoredGlass,
         Materials::Copper,
-        Materials::Crystal,
-        Materials::Emerald,
-        Materials::FrostedGlass,
-        Materials::Glass,
-        Materials::Gold,
-        Materials::Ice,
-        Materials::Jade,
-        Materials::Pearl,
+        Materials::BlackPlastic,
         Materials::RedPlastic,
+        Materials::WhiteRubber,
         Materials::RoughIron,
-        Materials::Silver,
+        Materials::Pearl,
+        Materials::Glass,
+        Materials::ColoredGlass,
+        Materials::Crystal,
+        Materials::Ice,
         Materials::Water,
+        Materials::Amber,
+        Materials::Emerald,
+        Materials::Jade,
+        Materials::FrostedGlass,
         Materials::WhiteRubber
     };
 
@@ -194,20 +234,10 @@ int main() {
         );
     }
 
-    Cube lightCube(
-        lightPosition, 
-        glm::vec3(0.5f), 
-        glm::vec3(1.0f), 
-        LightCubeShader, 
-        {},
-        Materials::Pearl,
-        false
-    );
 
     glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
     glfwSetCursorPosCallback(window, mouse_callback);
     glfwSetScrollCallback(window, mouse_roll_callback);
-    // glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
 
     // Цикл рендерингу
     while (!glfwWindowShouldClose(window))
@@ -216,44 +246,44 @@ int main() {
         deltaTime = currentFrame - lastFrame;
         lastFrame = currentFrame;
 
-        // Обробка вводу
         processInput(window);
 
-        // Виконування рендиринга
         glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
-        glClear(GL_COLOR_BUFFER_BIT| GL_DEPTH_BUFFER_BIT);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         view = camera.GetViewMatrix();
         projection = glm::perspective(glm::radians(camera.Fov), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
 
-        // Для прожектора треба оновлювати позицію і напрямок в циклі:
-        if (mainLight.type == LightType::SPOT) {
-            mainLight.position = camera.Position;
-            mainLight.direction = camera.Front;
+        // Оновлюємо Spotlight (індекс 4 - останній в масиві)
+        int spotlightIndex = 4;
+        sceneLights[spotlightIndex].position = camera.Position;
+        sceneLights[spotlightIndex].direction = camera.Front;
+        
+        // Вмикаємо/вимикаємо spotlight через яскравість
+        if (spotlightEnabled) {
+            sceneLights[spotlightIndex].diffuse = glm::vec3(4.0f, 4.0f, 5.0f);
+            sceneLights[spotlightIndex].specular = glm::vec3(3.0f);
+        } else {
+            sceneLights[spotlightIndex].diffuse = glm::vec3(0.0f);
+            sceneLights[spotlightIndex].specular = glm::vec3(0.0f);
         }
-
-
-
-        // Малюємо всі куби з освітленням
-        for(int i = 0; i < std::size(cubePositions); i++){
+        
+        // Малюємо непрозорі куби
+        for(size_t i = 0; i < cubes.size(); i++){
             if(cubeMaterials[i % std::size(cubeMaterials)].alpha >= 0.99f) {
                 cubes[i].showTex = showTextures;
-                cubes[i].draw(view, projection, mainLight, camera.Position);
+                cubes[i].draw(view, projection, sceneLights, camera.Position, camera);
             }
         }
 
-        for(int i = 0; i < std::size(cubePositions); i++){
+        // Малюємо прозорі куби
+        for(size_t i = 0; i < cubes.size(); i++){
             if(cubeMaterials[i % std::size(cubeMaterials)].alpha < 0.99f) {
                 cubes[i].showTex = showTextures;
-                cubes[i].draw(view, projection, mainLight, camera.Position);
+                cubes[i].draw(view, projection, sceneLights, camera.Position, camera);
             }
         }
-
-
-        // Малюємо джерело світла
-        lightCube.draw(view, projection, mainLight, camera.Position);
-
-        // glfw: обмін вмістом front- і back-буферів. Відслідковування I/O подій.
+        
         glfwSwapBuffers(window);
         glfwPollEvents();  
     }
@@ -261,12 +291,10 @@ int main() {
     cubes.clear();
     cubeTextures.clear();
 
-    // glfw: завершення, звільнення всіх раніше задіяних ресурсів
     glfwTerminate();
     return 0;
 }
 
-// Обробка всіх подій вводу
 void processInput(GLFWwindow *window)
 {
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
@@ -289,6 +317,7 @@ void processInput(GLFWwindow *window)
     {
         showTextures = !showTextures;
         tKeyPressed = true;
+        std::cout << "Текстури: " << (showTextures ? "ВКЛ" : "ВИКЛ") << std::endl;
     }
     
     if (glfwGetKey(window, GLFW_KEY_T) == GLFW_RELEASE)
@@ -296,12 +325,22 @@ void processInput(GLFWwindow *window)
         tKeyPressed = false;
     }
 
+    // Toggle spotlight (клавіша F)
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_PRESS && !fKeyPressed)
+    {
+        spotlightEnabled = !spotlightEnabled;
+        fKeyPressed = true;
+        std::cout << "Spotlight: " << (spotlightEnabled ? "ВКЛ" : "ВИКЛ") << std::endl;
+    }
+    
+    if (glfwGetKey(window, GLFW_KEY_F) == GLFW_RELEASE)
+    {
+        fKeyPressed = false;
+    }
 }
 
-// glfw: щоразу, коли змінюються розміри вікна (користувачем або операційною системою), викликається дана callback-функція
 void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 {
-    // Переконуємось, що вікно перегляду відповідає новим розмірам вікна. 
     glViewport(0, 0, width, height);
 }
 
